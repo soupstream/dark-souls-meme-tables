@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="42">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>1</ID>
+      <Description>"Always whiff"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+
+aobscanmodule(WhiffAob, DARKSOULS.exe, C1 E8 0C A8 01 75 1E)
+registersymbol(WhiffAob)
+
+WhiffAob+05:
+  nop
+  nop
+
+
+[DISABLE]
+
+WhiffAob+05:
+  db 75 1E
+
+unregistersymbol(WhiffAob)
+
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>2</ID>
+      <Description>"Disable wall clinking"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+
+aobscanmodule(WallClinkAob, DARKSOULS.exe, 83 C1 6A 74 04 0F B6 34 19)
+registersymbol(WallClinkAob)
+
+WallClinkAob+05:
+  xor esi, esi
+  nop
+  nop
+
+
+[DISABLE]
+
+WallClinkAob+05:
+  db 0F B6 34 19
+
+unregistersymbol(WallClinkAob)
+
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols/>
+</CheatTable>
