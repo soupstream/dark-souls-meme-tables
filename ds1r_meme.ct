@@ -49,52 +49,6 @@ unregistersymbol(WallClinkAob)
 </AssemblerScript>
     </CheatEntry>
   </CheatEntries>
-  <CheatCodes>
-    <CodeEntry>
-      <Description>Change of jne DarkSoulsRemastered.exe+37C8C6</Description>
-      <AddressString>DarkSoulsRemastered.exe+37C8A6</AddressString>
-      <Before>
-        <Byte>E9</Byte>
-        <Byte>0C</Byte>
-        <Byte>F6</Byte>
-        <Byte>C1</Byte>
-        <Byte>01</Byte>
-      </Before>
-      <Actual>
-        <Byte>75</Byte>
-        <Byte>1E</Byte>
-      </Actual>
-      <After>
-        <Byte>48</Byte>
-        <Byte>8B</Byte>
-        <Byte>4B</Byte>
-        <Byte>10</Byte>
-        <Byte>48</Byte>
-      </After>
-    </CodeEntry>
-    <CodeEntry>
-      <Description>Change of xor edx,edx</Description>
-      <AddressString>DarkSoulsRemastered.exe+529704</AddressString>
-      <Before>
-        <Byte>44</Byte>
-        <Byte>0F</Byte>
-        <Byte>B6</Byte>
-        <Byte>0C</Byte>
-        <Byte>10</Byte>
-      </Before>
-      <Actual>
-        <Byte>33</Byte>
-        <Byte>D2</Byte>
-      </Actual>
-      <After>
-        <Byte>44</Byte>
-        <Byte>8B</Byte>
-        <Byte>C2</Byte>
-        <Byte>45</Byte>
-        <Byte>85</Byte>
-      </After>
-    </CodeEntry>
-  </CheatCodes>
   <UserdefinedSymbols/>
   <Comments>Info about this table:
 </Comments>
