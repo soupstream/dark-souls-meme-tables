@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<CheatTable CheatEngineTableVersion="42">
+<CheatTable CheatEngineTableVersion="45">
   <CheatEntries>
     <CheatEntry>
-      <ID>0</ID>
-      <Description>"Always whiff"</Description>
-      <VariableType>Auto Assembler Script</VariableType>
-      <AssemblerScript>[ENABLE]
+      <ID>3</ID>
+      <Description>"Open"</Description>
+      <Options moHideChildren="1" moDeactivateChildrenAsWell="1"/>
+      <GroupHeader>1</GroupHeader>
+      <CheatEntries>
+        <CheatEntry>
+          <ID>0</ID>
+          <Description>"Always whiff"</Description>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>[ENABLE]
 
 aobscanmodule(WhiffAob, DarkSoulsRemastered.exe, C1 E9 0C F6 C1 01 75 1E)
 registersymbol(WhiffAob)
@@ -23,12 +29,12 @@ WhiffAob+06:
 unregistersymbol(WhiffAob)
 
 </AssemblerScript>
-    </CheatEntry>
-    <CheatEntry>
-      <ID>2</ID>
-      <Description>"Disable wall clinking"</Description>
-      <VariableType>Auto Assembler Script</VariableType>
-      <AssemblerScript>[ENABLE]
+        </CheatEntry>
+        <CheatEntry>
+          <ID>2</ID>
+          <Description>"Disable wall clinking"</Description>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>[ENABLE]
 
 aobscanmodule(WallClinkAob, DarkSoulsRemastered.exe, 49 63 C0 44 0F B6 0C 10)
 registersymbol(WallClinkAob)
@@ -47,6 +53,8 @@ WallClinkAob+03:
 unregistersymbol(WallClinkAob)
 
 </AssemblerScript>
+        </CheatEntry>
+      </CheatEntries>
     </CheatEntry>
   </CheatEntries>
   <UserdefinedSymbols/>
