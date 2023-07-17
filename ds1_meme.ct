@@ -5,7 +5,46 @@
       <ID>3</ID>
       <Description>"Open"</Description>
       <Options moHideChildren="1" moDeactivateChildrenAsWell="1"/>
-      <GroupHeader>1</GroupHeader>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+
+aobscanmodule(WorldChrManAOB, DARKSOULS.exe, 55 8b ec 83 e4 f0 a1 ? ? ? ? 33 c9)
+label(WorldChrMan)
+registersymbol(WorldChrMan)
+[WorldChrManAOB+7]:
+WorldChrMan:
+
+
+alloc(myoffset, 0x1000, DARKSOULS.exe)
+registersymbol(myoffset)
+label(myoffset_exit)
+
+// helper function for pointer chains
+// void* __stdcall myoffset(void* address, int offset)
+myoffset:
+  push ecx
+  push edx
+
+  mov ecx, [esp+c]
+  mov edx, [esp+10]
+  xor eax, eax
+  test ecx, ecx
+  jz myoffset_exit
+  mov eax, [ecx+edx]
+myoffset_exit:
+  pop edx
+  pop ecx
+  ret
+
+ 
+[DISABLE]
+
+unregistersymbol(WorldChrMan)
+
+dealloc(myoffset)
+unregistersymbol(myoffset)
+
+</AssemblerScript>
       <CheatEntries>
         <CheatEntry>
           <ID>1</ID>
@@ -52,6 +91,102 @@ WallClinkAob+05:
 
 unregistersymbol(WallClinkAob)
 
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>4</ID>
+          <Description>"Disco undead"</Description>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>[ENABLE]
+
+alloc(PlayerHue, 4, DARKSOULS.exe)
+registersymbol(PlayerHue)
+
+PlayerHue:
+  dd (float)0
+
+aobscanmodule(Present, DARKSOULS.exe, 8b 44 24 04 53 56 57 8b 78 10 8b f1)
+registersymbol(Present)
+alloc(PresentHook, 0x1000, DARKSOULS.exe)
+registersymbol(PresentHook)
+
+Present:
+  jmp PresentHook
+
+PresentHook:
+{$ccode}
+extern char* WorldChrMan;
+extern char* myoffset(void* address, int offset);
+extern float PlayerHue;
+
+char* ptr = WorldChrMan;
+ptr = myoffset(ptr, 0x3c);      // get PlayerIns
+ptr = myoffset(ptr, 0x60c);     // get FgModel
+ptr = myoffset(ptr, 0x8);       // get FrpgFgTextureIns
+if (!ptr) return;
+
+float* RGB = (float*)(ptr + 0x30);
+
+if (PlayerHue &lt; 1.0)
+{
+    RGB[0] = 1.0;
+    RGB[1] = PlayerHue;
+    RGB[2] = 0.0;
+}
+else if (PlayerHue &lt; 2.0)
+{
+    RGB[0] = 1.0 - (PlayerHue - 1.0);
+    RGB[1] = 1.0;
+    RGB[2] = 0.0;
+}
+else if (PlayerHue &lt; 3.0)
+{
+    RGB[0] = 0.0;
+    RGB[1] = 1.0;
+    RGB[2] = PlayerHue - 2.0;
+}
+else if (PlayerHue &lt; 4.0)
+{
+    RGB[0] = 0.0;
+    RGB[1] = 1.0 - (PlayerHue - 3.0);
+    RGB[2] = 1.0;
+}
+else if (PlayerHue &lt; 5.0)
+{
+    RGB[0] = PlayerHue - 4.0;
+    RGB[1] = 0.0;
+    RGB[2] = 1.0;
+}
+else if (PlayerHue &lt; 6.0)
+{
+    RGB[0] = 1.0;
+    RGB[1] = 0.0;
+    RGB[2] = 1.0 - (PlayerHue - 5.0);
+}
+
+PlayerHue += 0.02;
+if (PlayerHue &gt; 6.0)
+{
+    PlayerHue -= 6.0;
+}
+{$asm}
+
+  mov eax, [esp+4]
+  push ebx
+  jmp Present+5
+
+
+[DISABLE]
+
+dealloc(PlayerHue)
+unregistersymbol(PlayerHue)
+
+Present:
+  db 8b 44 24 04 53
+
+unregistersymbol(Present)
+dealloc(PresentHook)
+unregistersymbol(PresentHook)
 </AssemblerScript>
         </CheatEntry>
       </CheatEntries>

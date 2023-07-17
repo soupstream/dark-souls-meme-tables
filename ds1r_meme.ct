@@ -5,7 +5,67 @@
       <ID>3</ID>
       <Description>"Open"</Description>
       <Options moHideChildren="1" moDeactivateChildrenAsWell="1"/>
-      <GroupHeader>1</GroupHeader>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+
+// perform AOB scans
+
+{$lua}
+if syntaxcheck then return end
+
+-- helper functions
+
+local function scan(aob)
+    local moduleName = "DarkSoulsRemastered.exe"
+    local startAddress = getAddress(moduleName)
+    local stopAddress = startAddress + getModuleSize(moduleName)
+    local ms = createMemScan()
+    ms.setOnlyOneResult(true)
+    ms.firstScan(soExactValue, vtByteArray, nil, aob, nil, startAddress, stopAddress, "", nil, nil , true, nil, nil, nil)
+    ms.waitTillDone()
+    return ms.getOnlyResult() or error("aob not found: " .. aob)
+end
+
+local function registerSymbol(symbolname, address)
+    _G.registerSymbol(symbolname, address, true)
+end
+
+local function readOffset(address, instrOffset)
+    if instrOffset == nil then
+        instrOffset = 4
+    end
+    local offset = readInteger(address, true);
+    return address + instrOffset + offset;
+end
+
+local worldChrMan = scan("40 53 48 83 ec 20 48 8b c1 8b da 48 8b 0d")
+worldChrMan = readOffset(worldChrMan + 14)
+registerSymbol("WorldChrMan", worldChrMan)
+
+{$asm}
+
+
+alloc(myoffset, 0x1000, DarkSoulsRemastered.exe)
+registersymbol(myoffset)
+label(myoffset_exit)
+
+// helper function for pointer chains
+// void* myoffset(void* address, long long offset)
+myoffset:
+  xor rax, rax
+  test rcx, rcx
+  jz myoffset_exit
+  mov rax, [rcx+rdx]
+myoffset_exit:
+  ret
+ 
+[DISABLE]
+
+unregistersymbol(WorldChrMan)
+
+dealloc(myoffset)
+unregistersymbol(myoffset)
+</AssemblerScript>
       <CheatEntries>
         <CheatEntry>
           <ID>0</ID>
@@ -51,6 +111,102 @@ WallClinkAob+03:
   db 44 0F B6 0C 10
 
 unregistersymbol(WallClinkAob)
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>4</ID>
+          <Description>"Disco undead"</Description>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>[ENABLE]
+
+alloc(PlayerHue, 4, DarkSoulsRemastered.exe)
+registersymbol(PlayerHue)
+
+PlayerHue:
+  dd (float)0
+
+aobscanmodule(Present, DarkSoulsRemastered.exe, 48 89 5c 24 20 55 57 41 55 41 56 41 57 48 83 ec 40)
+registersymbol(Present)
+alloc(PresentHook, 0x1000, DarkSoulsRemastered.exe)
+registersymbol(PresentHook)
+
+Present:
+  jmp PresentHook
+
+PresentHook:
+{$ccode}
+extern char* WorldChrMan;
+extern char* myoffset(void* address, long long offset);
+extern float PlayerHue;
+
+char* ptr = WorldChrMan;
+ptr = myoffset(ptr, 0x68);     // get PlayerIns
+ptr = myoffset(ptr, 0x7d8);    // get FgModel
+ptr = myoffset(ptr, 0x10);     // get FrpgFgTextureIns
+if (!ptr) return;
+
+float* RGB = (float*)(ptr + 0x50);
+
+if (PlayerHue &lt; 1.0)
+{
+    RGB[0] = 1.0;
+    RGB[1] = PlayerHue;
+    RGB[2] = 0.0;
+}
+else if (PlayerHue &lt; 2.0)
+{
+    RGB[0] = 1.0 - (PlayerHue - 1.0);
+    RGB[1] = 1.0;
+    RGB[2] = 0.0;
+}
+else if (PlayerHue &lt; 3.0)
+{
+    RGB[0] = 0.0;
+    RGB[1] = 1.0;
+    RGB[2] = PlayerHue - 2.0;
+}
+else if (PlayerHue &lt; 4.0)
+{
+    RGB[0] = 0.0;
+    RGB[1] = 1.0 - (PlayerHue - 3.0);
+    RGB[2] = 1.0;
+}
+else if (PlayerHue &lt; 5.0)
+{
+    RGB[0] = PlayerHue - 4.0;
+    RGB[1] = 0.0;
+    RGB[2] = 1.0;
+}
+else if (PlayerHue &lt; 6.0)
+{
+    RGB[0] = 1.0;
+    RGB[1] = 0.0;
+    RGB[2] = 1.0 - (PlayerHue - 5.0);
+}
+
+PlayerHue += 0.01;
+if (PlayerHue &gt; 6.0)
+{
+    PlayerHue -= 6.0;
+}
+
+{$asm}
+
+  mov [rsp+20], rbx
+  jmp Present+5
+ 
+[DISABLE]
+
+dealloc(PlayerHue)
+unregistersymbol(PlayerHue)
+
+Present:
+  db 48 89 5c 24 20
+
+unregistersymbol(Present)
+dealloc(PresentHook)
+unregistersymbol(PresentHook)
 
 </AssemblerScript>
         </CheatEntry>
