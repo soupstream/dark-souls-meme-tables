@@ -210,6 +210,84 @@ unregistersymbol(PresentHook)
 
 </AssemblerScript>
         </CheatEntry>
+        <CheatEntry>
+          <ID>5</ID>
+          <Description>"Immersive health display"</Description>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>[ENABLE]
+
+aobscanmodule(MoveMapStepAOB, DarkSoulsRemastered.exe, 48 81 ec e0 01 00 00 48 c7 45 88 fe ff ff ff)
+label(MoveMapStep)
+registersymbol(MoveMapStep)
+alloc(MoveMapStepHook, 0x1000, DarkSoulsRemastered.exe)
+registersymbol(MoveMapStepHook)
+
+MoveMapStepAOB-15:
+MoveMapStep:
+  jmp MoveMapStepHook
+
+MoveMapStepHook:
+{$ccode}
+extern char* WorldChrMan;
+extern char* myoffset(void* address, long long offset);
+
+char* PlayerIns = myoffset(WorldChrMan, 0x68);
+char* ptr = PlayerIns;
+ptr = myoffset(ptr, 0x7d8);    // get FgModel
+ptr = myoffset(ptr, 0x10);     // get FrpgFgTextureIns
+if (!ptr) return;
+
+float* RGB = (float*)(ptr + 0x50);
+int health = *(int*)(PlayerIns + 0x3e8);
+int maxHealth = *(int*)(PlayerIns + 0x3ec);
+
+float scale = 0.6;
+if (health &lt;= 0)
+{
+    RGB[0] = 2.0 * scale;
+    RGB[1] = 0.0;
+    RGB[2] = 0.0;
+}
+else
+{
+    if (health &gt; maxHealth)
+    {
+        health = maxHealth;
+    }
+    float ratio = (float)health / (float)maxHealth;
+    ratio = ratio * ratio * (3.0 - 2.0 * ratio); // ease in/out a little
+    if (ratio &gt; 0.5)
+    {
+        RGB[0] = 2.0 * (1.0 - ratio) * scale;
+        RGB[1] = scale;
+        RGB[2] = 0.0;
+    }
+    else
+    {
+        RGB[0] = scale;
+        RGB[1] = ratio * 2.0 * scale;
+        RGB[2] = 0.0;
+    }
+}
+
+{$asm}
+  mov rax, rsp
+  push rbp
+  push rsi
+  jmp MoveMapStep+5
+ 
+ 
+[DISABLE]
+
+MoveMapStep:
+  db 48 8b c4 55 56
+
+unregistersymbol(MoveMapStep)
+dealloc(MoveMapStepHook)
+unregistersymbol(MoveMapStepHook)
+
+</AssemblerScript>
+        </CheatEntry>
       </CheatEntries>
     </CheatEntry>
   </CheatEntries>
