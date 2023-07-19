@@ -8,6 +8,15 @@
       <VariableType>Auto Assembler Script</VariableType>
       <AssemblerScript>[ENABLE]
 
+{$lua}
+-- workaround for cheat engine bug where it thinks tcc.lib is still loaded after
+-- attaching to a different process, which can cause {$ccode} blocks to crash
+if not getAddressSafe("tcc.lib") and getAddressSafe("__floatundidf") then
+    unregisterSymbol("__floatundidf");
+end
+{$asm}
+
+
 aobscanmodule(WorldChrManAOB, DARKSOULS.exe, 55 8b ec 83 e4 f0 a1 ? ? ? ? 33 c9)
 label(WorldChrMan)
 registersymbol(WorldChrMan)
@@ -36,6 +45,13 @@ myoffset_exit:
   pop ecx
   ret
 
+
+alloc(EmpathyMultiplier, 4, DARKSOULS.exe)
+registersymbol(EmpathyMultiplier)
+
+EmpathyMultiplier:
+  dd (float)1
+
  
 [DISABLE]
 
@@ -43,6 +59,9 @@ unregistersymbol(WorldChrMan)
 
 dealloc(myoffset)
 unregistersymbol(myoffset)
+
+dealloc(EmpathyMultiplier)
+unregistersymbol(EmpathyMultiplier)
 
 </AssemblerScript>
       <CheatEntries>
@@ -267,6 +286,209 @@ dealloc(MoveMapStepHook)
 unregistersymbol(MoveMapStepHook)
 
 </AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>6</ID>
+          <Description>"Empathy"</Description>
+          <Options moHideChildren="1"/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>[ENABLE]
+
+alloc(ApplyDamage, 0x1000, DARKSOULS.exe)
+registersymbol(ApplyDamage)
+
+ApplyDamage:
+{$ccode stack=ESP}
+char* entity = *(char**)(stack + 4);
+int amount = *(int*)(stack + 8);
+
+extern char* myoffset(void* address, long long offset);
+extern float EmpathyMultiplier;
+extern char* WorldChrMan;
+char* PlayerIns = myoffset(WorldChrMan, 0x3c);
+
+if (PlayerIns &amp;&amp; entity != PlayerIns)
+{
+    float multiplier = EmpathyMultiplier; // need to do this because of compiler bug
+    int scaledAmount = (int)(amount * multiplier);
+    int* playerHealth = (int*)(PlayerIns + 0x2d4);
+    *playerHealth -= scaledAmount;
+}
+
+{$asm}
+  ret
+
+aobscanmodule(ChangeHealth, DARKSOULS.exe, 85 ff 7d 1a f6 86 ff 01 00 00 04)
+registersymbol(ChangeHealth)
+alloc(ChangeHealthHook, 0x1000, DARKSOULS.exe)
+registersymbol(ChangeHealthHook)
+
+ChangeHealth:
+  jmp ChangeHealthHook
+
+ChangeHealthHook:
+{$ccode arg1=ESI arg2=EDI}
+char* entity = (char*)arg1;
+int amount = (int)arg2;
+
+extern void ApplyDamage(void* entity, int amount);
+
+int entityId = *(int*)(entity + 0x208);
+// ignore the Four Kings besides the shared health entity
+if (entityId &gt;= 1600801 &amp;&amp; entityId &lt;= 1600804) return;
+
+if (amount &lt; 0)
+{
+    ApplyDamage(entity, -amount);
+}
+
+{$asm}
+  test edi, edi
+  jge ChangeHealth+1e
+  test byte ptr [esi+1ff], 4
+  jmp ChangeHealth+b
+
+
+aobscanmodule(ZeroHealth, DARKSOULS.exe, 51 53 8b 5c 24 0c 56 57 6a 00 53)
+registersymbol(ZeroHealth)
+alloc(ZeroHealthHook, 0x1000, DARKSOULS.exe)
+registersymbol(ZeroHealthHook)
+
+ZeroHealth:
+  jmp ZeroHealthHook
+  nop
+
+ZeroHealthHook:
+{$ccode stack=ESP}
+char* entity = *(char**)(stack + 4);
+
+extern void ApplyDamage(void* entity, int amount);
+
+int health = *(int*)(entity + 0x2d4);
+ApplyDamage(entity, health);
+
+{$asm}
+  push ecx
+  push ebx
+  mov ebx, [esp+c]
+  jmp ZeroHealth+5
+
+aobscanmodule(ScriptedKill, DARKSOULS.exe, 02 db 02 db 32 9e 00 02 00 00)
+registersymbol(ScriptedKill)
+alloc(ScriptedKillHook, 0x1000, DARKSOULS.exe)
+registersymbol(ScriptedKillHook)
+
+ScriptedKill:
+  jmp ScriptedKillHook
+  nop
+  nop
+  nop
+  nop
+  nop
+
+ScriptedKillHook:
+{$ccode arg1=ESI arg2=EBX}
+char* entity = (char*)arg1;
+int noReward = arg2 &amp; 1;
+
+extern void ApplyDamage(void* entity, int amount);
+
+int entityId = *(int*)(entity + 0x208);
+// only include Ceaseless Discharge scripted kill
+if (entityId != 1410600) return;
+
+if (!noReward)
+{
+    int health = *(int*)(entity + 0x2d4);
+    ApplyDamage(entity, health);
+}
+
+{$asm}
+  add bl, bl
+  add bl, bl
+  xor bl, byte ptr [esi+200]
+  jmp ScriptedKill+a
+
+
+aobscanmodule(SpEffectDamage, DARKSOULS.exe, 8b 87 d4 02 00 00 03 c3 50 57)
+registersymbol(SpEffectDamage)
+alloc(SpEffectDamageHook, 0x1000, DARKSOULS.exe)
+registersymbol(SpEffectDamageHook)
+
+SpEffectDamage:
+  jmp SpEffectDamageHook
+  nop
+
+SpEffectDamageHook:
+{$ccode arg1=EDI arg2=EBX}
+char* entity = (char*)arg1;
+int amount = (int)arg2;
+
+extern void ApplyDamage(void* entity, int amount);
+
+int entityId = *(int*)(entity + 0x208);
+
+// second bell gargoyle, Oscar
+if (entityId == 1010801 || entityId == 6023)
+{
+    // they get their initial hp reduced by an speffect
+    int health = *(int*)(entity + 0x2d4);
+    int maxHealth = *(int*)(entity + 0x2d8);
+    if (health == maxHealth) return;
+}
+
+if (amount &lt; 0)
+{
+    ApplyDamage(entity, -amount);
+}
+{$asm}
+  mov eax, [edi+2d4]
+  jmp SpEffectDamage+6
+
+
+[DISABLE]
+
+dealloc(ApplyDamage)
+unregistersymbol(ApplyDamage)
+
+ChangeHealth:
+  db 85 ff 7d 1a f6 86 ff 01 00 00 04
+
+unregistersymbol(ChangeHealth)
+dealloc(ChangeHealthHook)
+unregistersymbol(ChangeHealthHook)
+
+ZeroHealth:
+  db 51 53 8b 5c 24 0c
+
+unregistersymbol(ZeroHealth)
+dealloc(ZeroHealthHook)
+unregistersymbol(ZeroHealthHook)
+
+ScriptedKill:
+  db 02 db 02 db 32 9e 00 02 00 00
+
+unregistersymbol(ScriptedKill)
+dealloc(ScriptedKillHook)
+unregistersymbol(ScriptedKillHook)
+
+SpEffectDamage:
+  db 8b 87 d4 02 00 00
+
+unregistersymbol(SpEffectDamage)
+dealloc(SpEffectDamageHook)
+unregistersymbol(SpEffectDamageHook)
+
+</AssemblerScript>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>7</ID>
+              <Description>"Damage multiplier"</Description>
+              <ShowAsSigned>0</ShowAsSigned>
+              <VariableType>Float</VariableType>
+              <Address>EmpathyMultiplier</Address>
+            </CheatEntry>
+          </CheatEntries>
         </CheatEntry>
       </CheatEntries>
     </CheatEntry>

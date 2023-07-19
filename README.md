@@ -10,3 +10,5 @@ Some Cheat Engine tables I've made for Dark Souls. What I have so far:
   * Your skin cycles through the color spectrum
 * Immersive health display (DS1/DS1R)
   * Shows your HP on your body like in Dead Space
+* Empathy (DS1)
+  * You feel the pain of anyone else who takes damage
