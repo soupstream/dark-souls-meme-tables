@@ -9,8 +9,8 @@
       <AssemblerScript>[ENABLE]
 
 {$lua}
--- workaround for cheat engine bug where it thinks tcc.lib is still loaded after
--- attaching to a different process, which can cause {$ccode} blocks to crash
+if syntaxcheck then return end
+-- workaround for cheat engine bug: https://github.com/cheat-engine/cheat-engine/issues/2638
 if not getAddressSafe("tcc.lib") and getAddressSafe("__floatundidf") then
     unregisterSymbol("__floatundidf");
 end
