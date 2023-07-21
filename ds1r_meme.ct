@@ -12,10 +12,14 @@
 
 {$lua}
 if syntaxcheck then return end
+-- workaround for cheat engine bug: https://github.com/cheat-engine/cheat-engine/issues/2638
+if not getAddressSafe("tcc.lib") and getAddressSafe("__floatundidf") then
+    unregisterSymbol("__floatundidf");
+end
 
 -- helper functions
 
-local function scan(aob)
+function myScan(aob)
     local moduleName = "DarkSoulsRemastered.exe"
     local startAddress = getAddress(moduleName)
     local stopAddress = startAddress + getModuleSize(moduleName)
@@ -26,11 +30,11 @@ local function scan(aob)
     return ms.getOnlyResult() or error("aob not found: " .. aob)
 end
 
-local function registerSymbol(symbolname, address)
-    _G.registerSymbol(symbolname, address, true)
+function myRegisterSymbol(symbolname, address)
+    registerSymbol(symbolname, address, true)
 end
 
-local function readOffset(address, instrOffset)
+function myReadOffset(address, instrOffset)
     if instrOffset == nil then
         instrOffset = 4
     end
@@ -38,9 +42,9 @@ local function readOffset(address, instrOffset)
     return address + instrOffset + offset;
 end
 
-local worldChrMan = scan("40 53 48 83 ec 20 48 8b c1 8b da 48 8b 0d")
-worldChrMan = readOffset(worldChrMan + 14)
-registerSymbol("WorldChrMan", worldChrMan)
+local worldChrMan = myScan("40 53 48 83 ec 20 48 8b c1 8b da 48 8b 0d")
+worldChrMan = myReadOffset(worldChrMan + 14)
+myRegisterSymbol("WorldChrMan", worldChrMan)
 
 {$asm}
 
@@ -58,13 +62,25 @@ myoffset:
   mov rax, [rcx+rdx]
 myoffset_exit:
   ret
- 
+
+
+alloc(EmpathyMultiplier, 4, DarkSoulsRemastered.exe)
+registersymbol(EmpathyMultiplier)
+
+EmpathyMultiplier:
+  dd (float)1
+
+
 [DISABLE]
 
 unregistersymbol(WorldChrMan)
 
 dealloc(myoffset)
 unregistersymbol(myoffset)
+
+dealloc(EmpathyMultiplier)
+unregistersymbol(EmpathyMultiplier)
+
 </AssemblerScript>
       <CheatEntries>
         <CheatEntry>
@@ -275,7 +291,23 @@ else
   push rbp
   push rsi
   jmp MoveMapStep+5
- 
+
+
+// patch out anticheat code overwriting the hook
+define(MoveMapStepCheck1, DarkSoulsRemastered.exe+27C44FE)
+registersymbol(MoveMapStepCheck1)
+
+MoveMapStepCheck1:
+  nop
+  nop
+
+define(MoveMapStepCheck2, DarkSoulsRemastered.exe+2F0EE3C)
+registersymbol(MoveMapStepCheck2)
+
+MoveMapStepCheck2:
+  nop
+  nop
+
  
 [DISABLE]
 
@@ -286,7 +318,278 @@ unregistersymbol(MoveMapStep)
 dealloc(MoveMapStepHook)
 unregistersymbol(MoveMapStepHook)
 
+MoveMapStepCheck1:
+  db 88 02
+
+unregistersymbol(MoveMapStepCheck1)
+
+MoveMapStepCheck2:
+  db 89 02
+
+unregistersymbol(MoveMapStepCheck2)
+
+
 </AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>6</ID>
+          <Description>"Empathy"</Description>
+          <Options moHideChildren="1"/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>[ENABLE]
+
+{$lua}
+if syntaxcheck then return end
+
+-- not enough unique data at start of function for normal aob scan
+-- so find where it's called and dereference address
+local zeroHealth = myScan("c7 83 2c 03 00 00 00 00 00 c0 e8")
+zeroHealth = myReadOffset(zeroHealth + 11)
+zeroHealth = myReadOffset(zeroHealth + 1)
+myRegisterSymbol("ZeroHealth", zeroHealth)
+
+local scriptedKill = myScan("40 0f b6 d5 48 8b cb e8 ? ? ? ? 48 8b cb e8")
+scriptedKill = myReadOffset(scriptedKill + 16)
+scriptedKill = myReadOffset(scriptedKill + 1)
+myRegisterSymbol("ScriptedKill", scriptedKill)
+{$asm}
+
+alloc(ApplyDamage, 0x1000, DarkSoulsRemastered.exe)
+registersymbol(ApplyDamage)
+
+ApplyDamage:
+{$ccode arg1=RCX arg2=EDX}
+char* entity = (char*)arg1;
+int amount = (int)arg2;;
+
+extern char* myoffset(void* address, long long offset);
+extern float EmpathyMultiplier;
+extern char* WorldChrMan;
+char* PlayerIns = myoffset(WorldChrMan, 0x68);
+
+if (PlayerIns &amp;&amp; entity != PlayerIns)
+{
+    float multiplier = EmpathyMultiplier; // need to do this because of compiler bug
+    int scaledAmount = (int)(amount * multiplier);
+    int* playerHealth = (int*)(PlayerIns + 0x3e8);
+    *playerHealth -= scaledAmount;
+}
+{$asm}
+  ret
+
+
+aobscanmodule(HitDamage, DarkSoulsRemastered.exe, 8b 93 e8 03 00 00 48 8b cb 03 d7 e9)
+registersymbol(HitDamage)
+alloc(HitDamageHook, 0x1000, DarkSoulsRemastered.exe)
+registersymbol(HitDamageHook)
+
+HitDamage:
+  jmp HitDamageHook
+  nop
+
+HitDamageHook:
+{$ccode arg1=RBX arg2=EDI}
+char* entity = (char*)arg1;
+int amount = (int)arg2;
+
+extern void ApplyDamage(void* entity, int amount);
+
+int entityId = *(int*)(entity + 0x2b0);
+// ignore the Four Kings besides the shared health entity
+if (entityId &gt;= 1600801 &amp;&amp; entityId &lt;= 1600804) return;
+
+if (amount &lt; 0)
+{
+    ApplyDamage(entity, -amount);
+}
+{$asm}
+  mov edx, [rbx+3e8]
+  jmp HitDamage+6
+
+
+aobscanmodule(FallDamage, DarkSoulsRemastered.exe, 8b 93 e8 03 00 00 48 8b cb 03 d6 e9)
+registersymbol(FallDamage)
+alloc(FallDamageHook, 0x1000, DarkSoulsRemastered.exe)
+registersymbol(FallDamageHook)
+
+FallDamage:
+  jmp FallDamageHook
+  nop
+
+FallDamageHook:
+{$ccode arg1=RBX arg2=ESI}
+char* entity = (char*)arg1;
+int amount = (int)arg2;
+
+extern void ApplyDamage(void* entity, int amount);
+
+if (amount &lt; 0)
+{
+    ApplyDamage(entity, -amount);
+}
+{$asm}
+  mov edx, [rbx+3e8]
+  jmp FallDamage+6
+
+
+aobscanmodule(SpEffectDamage, DarkSoulsRemastered.exe, 8b 97 e8 03 00 00 48 8b cf 03 d6)
+registersymbol(SpEffectDamage)
+alloc(SpEffectDamageHook, 0x1000, DarkSoulsRemastered.exe)
+registersymbol(SpEffectDamageHook)
+
+SpEffectDamage:
+  jmp SpEffectDamageHook
+  nop
+
+SpEffectDamageHook:
+{$ccode arg1=RDI arg2=ESI}
+char* entity = (char*)arg1;
+int amount = (int)arg2;
+
+extern void ApplyDamage(void* entity, int amount);
+
+int entityId = *(int*)(entity + 0x2b0);
+
+// second bell gargoyle, Oscar
+if (entityId == 1010801 || entityId == 6023)
+{
+    // they get their initial hp reduced by an speffect
+    int health = *(int*)(entity + 0x3e8);
+    int maxHealth = *(int*)(entity + 0x3ec);
+    if (health == maxHealth) return;
+}
+
+if (amount &lt; 0)
+{
+    ApplyDamage(entity, -amount);
+}
+{$asm}
+  mov edx, [rdi+3e8]
+  jmp SpEffectDamage+6
+
+
+alloc(ZeroHealthHook, 0x1000, DarkSoulsRemastered.exe)
+registersymbol(ZeroHealthHook)
+
+ZeroHealth:
+  jmp ZeroHealthHook
+
+ZeroHealthHook:
+{$ccode arg1=RCX}
+char* entity = (char*)arg1;
+
+extern void ApplyDamage(void* entity, int amount);
+
+int health = *(int*)(entity + 0x3e8);
+ApplyDamage(entity, health);
+{$asm}
+ZeroHealthOrig:
+  mov [rsp-8], rbx
+  jmp ZeroHealth+5
+
+
+// patch out anticheat code overwriting the hook
+define(ZeroHealthCheck1, DarkSoulsRemastered.exe+2A31C26)
+registersymbol(ZeroHealthCheck1)
+
+ZeroHealthCheck1:
+  nop
+  nop
+
+define(ZeroHealthCheck2, DarkSoulsRemastered.exe+2E3F911)
+registersymbol(ZeroHealthCheck2)
+
+ZeroHealthCheck2:
+  nop
+  nop
+
+alloc(ScriptedKillHook, 0x1000, DarkSoulsRemastered.exe)
+registersymbol(ScriptedKillHook)
+
+ScriptedKill:
+  jmp ScriptedKillHook
+
+ScriptedKillHook:
+{$ccode arg1=RCX}
+char* entity = (char*)arg1;
+int noReward = (*(entity + 0x2a8) &gt;&gt; 2) &amp; 1;
+
+extern void ApplyDamage(void* entity, int amount);
+
+int entityId = *(int*)(entity + 0x2b0);
+// only include Ceaseless Discharge scripted kill
+if (entityId != 1410600) return;
+
+if (!noReward)
+{
+    int health = *(int*)(entity + 0x3e8);
+    ApplyDamage(entity, health);
+}
+{$asm}
+  mov [rsp-8], rbx
+  jmp ScriptedKill+5
+
+
+[DISABLE]
+
+unregistersymbol(ApplyDamage)
+dealloc(ApplyDamage)
+
+HitDamage:
+  db 8b 93 e8 03 00 00
+
+unregistersymbol(HitDamage)
+dealloc(HitDamageHook)
+unregistersymbol(HitDamageHook)
+
+FallDamage:
+  db 8b 93 e8 03 00 00
+
+unregistersymbol(FallDamage)
+dealloc(FallDamageHook)
+unregistersymbol(FallDamageHook)
+
+SpEffectDamage:
+  db 8b 97 e8 03 00 00
+
+unregistersymbol(SpEffectDamage)
+dealloc(SpEffectDamageHook)
+unregistersymbol(SpEffectDamageHook)
+
+ZeroHealth:
+  db 48 89 5c 24 f8
+
+unregistersymbol(ZeroHealth)
+dealloc(ZeroHealthHook)
+unregistersymbol(ZeroHealthHook)
+
+ZeroHealthCheck1:
+  db 88 02
+
+unregistersymbol(ZeroHealthCheck1)
+
+ZeroHealthCheck2:
+  db 89 02
+
+unregistersymbol(ZeroHealthCheck2)
+
+ScriptedKill:
+  db 48 89 5c 24 f8
+
+unregistersymbol(ScriptedKill)
+dealloc(ScriptedKillHook)
+unregistersymbol(ScriptedKillHook)
+
+</AssemblerScript>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>7</ID>
+              <Description>"Damage multiplier"</Description>
+              <ShowAsSigned>0</ShowAsSigned>
+              <VariableType>Float</VariableType>
+              <Address>EmpathyMultiplier</Address>
+            </CheatEntry>
+          </CheatEntries>
         </CheatEntry>
       </CheatEntries>
     </CheatEntry>
